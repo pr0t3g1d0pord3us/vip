@@ -98,29 +98,27 @@ def _detectar_categorias(marca_norm: str, modelo_norm: str) -> list[str]:
     """
     m1 = modelo_norm.split()[0] if modelo_norm.split() else ""
 
-    # Marcas que só fazem carros — nunca truck, nunca moto
-    if marca_norm in MARCAS_SOMENTE_CARRO:
-        return ["cars"]
-
-    # Truck: modelo começa com número tipo "24.280", "1719" etc
-    # Mas ignora se a marca é conhecida por usar números como nome (Peugeot 208, Fiat 500)
-    if RE_MODELO_TRUCK.match(modelo_norm) and marca_norm not in MARCAS_MODELO_NUMERICO:
-        return ["trucks", "cars"]
-
-    # Truck por palavra-chave no modelo
-    if any(w in modelo_norm for w in PALAVRAS_TRUCK):
-        return ["trucks", "cars"]
-
-    # Moto: marca exclusivamente de moto
-    if marca_norm in MARCAS_MOTO:
-        return ["motorcycles", "cars"]
-
-    # Moto: primeira palavra do modelo é conhecida de moto
+    # ── PALAVRAS_MOTO antes de marca — resolve Honda CG/XRE/BIZ/POP
+    #    que estão em MARCAS_SOMENTE_CARRO mas têm modelos de moto
     if m1 in PALAVRAS_MOTO:
         return ["motorcycles", "cars"]
 
-    # Marca mista (BMW, Honda) — tenta carro primeiro, depois moto
-    # (já cobre S1000RR via PALAVRAS_MOTO acima)
+    # ── Marcas que só fazem carros — nunca truck, nunca moto
+    if marca_norm in MARCAS_SOMENTE_CARRO:
+        return ["cars"]
+
+    # ── Truck: modelo começa com número tipo "24.280", "1719" etc
+    if RE_MODELO_TRUCK.match(modelo_norm) and marca_norm not in MARCAS_MODELO_NUMERICO:
+        return ["trucks", "cars"]
+
+    if any(w in modelo_norm for w in PALAVRAS_TRUCK):
+        return ["trucks", "cars"]
+
+    # ── Marca exclusivamente de moto (Yamaha, Kawasaki, Dafra etc.)
+    if marca_norm in MARCAS_MOTO:
+        return ["motorcycles", "cars"]
+
+    # ── Marca mista — tenta carro primeiro, depois moto e truck
     return ["cars", "motorcycles", "trucks"]
 
 # Aliases de marca — normaliza nomes alternativos para o nome FIPE
@@ -503,7 +501,7 @@ async def buscar_valor_mercado(titulo: str, debug: bool = False) -> dict:
         ano_diff    = abs(ano_ret_int - ano_ref_int)
     except Exception:
         ano_diff = 0
-    confiavel = ano_diff <= 5
+    confiavel = ano_diff <= 7
 
     resultado.update({
         "valor":      round(valor_min),

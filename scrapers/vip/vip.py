@@ -59,11 +59,12 @@ BROWSER_UA = (
     "Chrome/124.0.0.0 Safari/537.36"
 )
 
-ANO_MIN        = 2014
-ANO_MAX        = 2030
-CUSTO_REPARO   = 5_000   # carro
-CUSTO_REPARO_MOTO = 1_500
-MARGEM_MINIMA  = 10_000
+ANO_MIN            = 2014
+ANO_MAX            = 9999   # sem limite superior — 2026, 2027... passam
+CUSTO_REPARO       = 5_000   # carro
+CUSTO_REPARO_MOTO  = 1_500
+MARGEM_MINIMA      = 10_000  # carro
+MARGEM_MINIMA_MOTO =  2_000  # moto (mais barata, margem menor já é boa)
 
 
 # ─── Parsers ───────────────────────────────────────────────────────────────────
@@ -329,42 +330,56 @@ async def coletar_cards_pagina(page: Page) -> list[dict]:
 
 # ─── Playwright: detalhe do lote ──────────────────────────────────────────────
 
+_DETALHE_JS = """
+    (url) => {
+        const imgs = [...document.querySelectorAll('img')]
+            .map(i => i.src || i.getAttribute('data-src') || '')
+            .filter(src =>
+                src && src.length > 20 &&
+                !src.includes('logo') && !src.includes('banner') &&
+                !src.includes('icon') && !src.includes('.svg') &&
+                (src.includes('blob') || src.includes('armazup') ||
+                 src.includes('vipleiloes') || src.match(/\\.(jpg|jpeg|png|webp)/i))
+            );
+
+        const seen = new Set();
+        const imagens = [];
+        for (const s of imgs) {
+            const k = s.split('?')[0];
+            if (!seen.has(k)) { seen.add(k); imagens.push(k); }
+        }
+
+        const main = document.querySelector(
+            'main, [class*="detalhe"], [class*="lote-detail"], [class*="content"], article'
+        );
+        const texto = (main || document.body).innerText.trim();
+
+        return { url, imagens: imagens.slice(0, 12), texto_pagina: texto };
+    }
+"""
+
 async def coletar_detalhe(page: Page, url: str) -> dict:
-    """Acessa a página do lote e extrai texto completo + imagens."""
-    try:
-        await page.goto(url, wait_until="networkidle", timeout=60_000)
-        await asyncio.sleep(1.2)
+    """
+    Acessa a página do lote e extrai texto completo + imagens.
+    Tenta até 3 vezes com timeout progressivo (60s → 90s → 120s).
+    Na 2ª e 3ª tentativa usa wait_until="domcontentloaded" (mais tolerante).
+    """
+    timeouts    = [60_000, 90_000, 120_000]
+    wait_untils = ["networkidle", "domcontentloaded", "domcontentloaded"]
+    last_err    = ""
 
-        return await page.evaluate("""
-            (url) => {
-                const imgs = [...document.querySelectorAll('img')]
-                    .map(i => i.src || i.getAttribute('data-src') || '')
-                    .filter(src =>
-                        src && src.length > 20 &&
-                        !src.includes('logo') && !src.includes('banner') &&
-                        !src.includes('icon') && !src.includes('.svg') &&
-                        (src.includes('blob') || src.includes('armazup') ||
-                         src.includes('vipleiloes') || src.match(/\\.(jpg|jpeg|png|webp)/i))
-                    );
+    for tentativa, (timeout, wait_until) in enumerate(zip(timeouts, wait_untils), 1):
+        try:
+            await page.goto(url, wait_until=wait_until, timeout=timeout)
+            await asyncio.sleep(1.2 if tentativa == 1 else 2.0)
+            return await page.evaluate(_DETALHE_JS, url)
+        except Exception as e:
+            last_err = str(e)[:120]
+            if tentativa < len(timeouts):
+                print(f" ⏱retry{tentativa}", end="", flush=True)
+                await asyncio.sleep(3.0)
 
-                const seen = new Set();
-                const imagens = [];
-                for (const s of imgs) {
-                    const k = s.split('?')[0];
-                    if (!seen.has(k)) { seen.add(k); imagens.push(k); }
-                }
-
-                const main = document.querySelector(
-                    'main, [class*="detalhe"], [class*="lote-detail"], [class*="content"], article'
-                );
-                const texto = (main || document.body).innerText.trim();
-
-                return { url, imagens: imagens.slice(0, 12), texto_pagina: texto };
-            }
-        """, url)
-
-    except Exception as e:
-        return {"url": url, "imagens": [], "texto_pagina": "", "erro": str(e)}
+    return {"url": url, "imagens": [], "texto_pagina": "", "erro": last_err}
 
 
 # ─── Paginação ─────────────────────────────────────────────────────────────────
@@ -617,10 +632,12 @@ async def enriquecer_fipe(lotes: list[dict]) -> list[dict]:
                 _m0 = (lote.get("modelo") or "").lower().split()
                 _palavras_moto = {"cg","xre","biz","pop","pcx","cb","cbr","ninja",
                                   "fazer","ybr","nxr","bros","nmax","mt","fz"}
-                custo = CUSTO_REPARO_MOTO if (_m0 and _m0[0] in _palavras_moto) else CUSTO_REPARO
+                is_moto = _m0 and _m0[0] in _palavras_moto
+                custo = CUSTO_REPARO_MOTO if is_moto else CUSTO_REPARO
                 margem_liq = round(margem_bruta - custo, 2)
+                margem_min = MARGEM_MINIMA_MOTO if is_moto else MARGEM_MINIMA
 
-                if desc_pct > 0 and margem_liq >= MARGEM_MINIMA:
+                if desc_pct > 0 and margem_liq >= margem_min:
                     lote["desconto_pct"]       = desc_pct
                     lote["margem_bruta"]       = margem_bruta
                     lote["margem_bruta_fmt"]   = _fmt_fipe(margem_bruta)
