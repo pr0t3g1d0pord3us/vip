@@ -18,8 +18,8 @@ class SupabaseClient:
     """Cliente Supabase — schema auctions, tabela veiculos"""
 
     def __init__(self):
-        self.url = os.getenv('SUPABASE_URL')
-        self.key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
+        self.url = (os.getenv('SUPABASE_URL') or '').strip()
+        self.key = (os.getenv('SUPABASE_SERVICE_ROLE_KEY') or '').strip()
 
         if not self.url or not self.key:
             raise ValueError("⚠️  Configure SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY")
