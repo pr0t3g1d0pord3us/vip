@@ -1,0 +1,54 @@
+name: VIP Leilões — Coleta
+
+on:
+  schedule:
+    # Roda todo dia às 07:00, 12:00 e 19:00 (horário de Brasília = UTC-3)
+    - cron: '0 10,15,22 * * *'
+  workflow_dispatch:   # permite rodar manualmente pelo GitHub
+
+jobs:
+  coletar:
+    name: Coleta VIP → Supabase
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    env:
+      SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      FIPE_TOKEN:                ${{ secrets.FIPE_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-vip-${{ hashFiles('scrapers/vip/requirements.txt') }}
+          restore-keys: ${{ runner.os }}-pip-vip-
+
+      - name: Instalar dependências
+        run: |
+          pip install --upgrade pip
+          pip install playwright httpx requests
+
+      - name: Instalar Chromium (Playwright)
+        run: playwright install chromium --with-deps
+
+      - name: Rodar scraper VIP
+        run: |
+          python scrapers/vip/vip.py --output /tmp/vip_coleta.json
+
+      - name: Upload artefato JSON (debug)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vip-coleta-${{ github.run_number }}
+          path: /tmp/vip_coleta.json
+          retention-days: 7
