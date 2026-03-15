@@ -656,7 +656,7 @@ async def enriquecer_fipe(lotes: list[dict]) -> list[dict]:
             print(f"→ {RED}{motivo}{RESET}")
             falhou += 1
 
-        await asyncio.sleep(1.2)
+        await asyncio.sleep(3.5)
 
     print(f"\n  {GREEN}FIPE OK: {ok}{RESET}  ·  {RED}não encontrado: {falhou}{RESET}")
     return lotes
@@ -729,7 +729,7 @@ async def coletar_playwright(headless: bool = True, limit: int = 0) -> tuple[lis
                 if not det.get("erro")
                 else f"{RED}erro: {det['erro'][:60]}{RESET}"
             )
-            await asyncio.sleep(0.8)
+            await asyncio.sleep(1.5)
 
         await browser.close()
 
@@ -809,6 +809,7 @@ def upload_to_supabase(lotes: list[dict]) -> dict:
         print(f"  {YELLOW}⚠️   {skipped_outros} lote(s) ignorado(s) — sem link/ano/lance/FIPE{RESET}")
     if not registros:
         print(f"  {RED}Nenhum registro válido para upload.{RESET}")
+        print(f"  {YELLOW}(todos sem FIPE ou sem margem ≥ mínima — verifique rate limit da API){RESET}")
         return {}
 
     print(f"\n{BOLD}{'='*68}{RESET}")
