@@ -60,7 +60,7 @@ BROWSER_UA = (
 )
 
 ANO_MIN        = 2014
-ANO_MAX        = 2025
+ANO_MAX        = 2030
 CUSTO_REPARO   = 5_000   # carro
 CUSTO_REPARO_MOTO = 1_500
 MARGEM_MINIMA  = 10_000
