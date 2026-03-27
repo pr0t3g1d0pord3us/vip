@@ -1,32 +1,42 @@
 name: VIP Leilões — Coleta
-
 on:
   schedule:
-    # Roda todo dia às 07:00, 12:00 e 19:00 (horário de Brasília = UTC-3)
+    # Roda dias ímpares às 07:00, 12:00 e 19:00 (horário de Brasília = UTC-3)
     - cron: '0 10,15,22 * * *'
   workflow_dispatch:   # permite rodar manualmente pelo GitHub
-
 jobs:
   coletar:
     name: Coleta VIP → Supabase
     runs-on: ubuntu-latest
     timeout-minutes: 60
-
     env:
       SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       FIPE_TOKEN:                ${{ secrets.FIPE_TOKEN }}
-
     steps:
+      - name: Verificar se hoje é dia de rodar (dias ímpares)
+        id: check_day
+        run: |
+          DAY=$(date +%-d)
+          if (( DAY % 2 == 1 )); then
+            echo "run=true" >> $GITHUB_OUTPUT
+          else
+            echo "run=false" >> $GITHUB_OUTPUT
+            echo "Hoje é dia $DAY (par) — pulando coleta."
+          fi
+
       - name: Checkout
+        if: steps.check_day.outputs.run == 'true'
         uses: actions/checkout@v4
 
       - name: Setup Python 3.11
+        if: steps.check_day.outputs.run == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
       - name: Cache pip
+        if: steps.check_day.outputs.run == 'true'
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
@@ -34,19 +44,22 @@ jobs:
           restore-keys: ${{ runner.os }}-pip-vip-
 
       - name: Instalar dependências
+        if: steps.check_day.outputs.run == 'true'
         run: |
           pip install --upgrade pip
           pip install playwright httpx requests
 
       - name: Instalar Chromium (Playwright)
+        if: steps.check_day.outputs.run == 'true'
         run: playwright install chromium --with-deps
 
       - name: Rodar scraper VIP
+        if: steps.check_day.outputs.run == 'true'
         run: |
           python scrapers/vip/vip.py --output /tmp/vip_coleta.json
 
       - name: Upload artefato JSON (debug)
-        if: always()
+        if: steps.check_day.outputs.run == 'true' && always()
         uses: actions/upload-artifact@v4
         with:
           name: vip-coleta-${{ github.run_number }}
