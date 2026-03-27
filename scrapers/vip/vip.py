@@ -779,6 +779,7 @@ def normalize_to_db(lote: dict) -> dict | None:
         "km":                     lote.get("km"),
         "origem":                 "Recuperado Financiamento",
         "ativo":                  True,
+        "premium":                lote.get("desconto_pct") is not None and lote["desconto_pct"] >= 50,
     }
 
 
